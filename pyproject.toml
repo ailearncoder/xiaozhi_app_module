@@ -1,0 +1,17 @@
+[project]
+name = "xiaozhi-app"
+version = "0.1.0"
+description = "小智App核心库"
+readme = "README.md"
+authors = [
+    { name = "panxuesen", email = "panxuesen520@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+xiaozhi-app = "xiaozhi_app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
