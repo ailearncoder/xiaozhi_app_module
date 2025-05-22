@@ -7,3 +7,6 @@ __all__ = [
     'property_def',
     'method_def',
 ]
+
+def main() -> None:
+    print("Hello from xiaozhi-app!")
