@@ -1,11 +1,5 @@
-import socket
-import sys
-import struct
 import json
-import threading
-import time
-from typing import Dict, Any, Callable, Optional, Union, List, Tuple
-from enum import Enum, auto
+from typing import Dict, Any, Tuple
 import os
 import logging
 
@@ -406,3 +400,97 @@ class Thing:
 
     def SaveConfig(self):
         pass
+
+class MCPProxy:
+    def __init__(self, host: str = "127.0.0.1", port: int = 80):
+        """
+        初始化类实例。
+
+        Args:
+            host (str, optional): 主机地址，默认为 "127.0.0.1"。
+            port (int, optional): 端口号，默认为 80。
+        """
+        self.host = os.getenv("THING_HOST", host)
+        self.port = int(os.getenv("THING_PORT", port))
+        self.network = NetworkManager(self.host, self.port)
+        self.parser = MessageParser(self._on_message, self._on_error)
+        self.properties = {}
+        self.methods = {}
+        self._property_getters = {}
+        self._method_handlers = {}
+        self._connection_thread = None
+
+    @property
+    def connected(self) -> bool:
+        """
+        检查是否已连接到服务器。
+        Returns:
+            bool: 如果已连接则返回 True，否则返回 False。
+        """
+        return self.network.connected
+
+    def set_tools(self, tools: list):
+        """Send the registration message to the server."""
+        logging.debug(f"set_tools: {tools}")
+        self.send_json({"action": "register_mcp_tools", "tools": tools})
+
+    def _handle_raw_message(self, raw_data: bytes):
+        """处理原始网络数据"""
+        self.parser.process_data(raw_data)
+
+    def _on_network_error(self, error: Exception):
+        """网络错误处理"""
+        print(f"Network error: {error}")
+        self.network.disconnect()
+
+    def connect(self):
+        """Connect to the server and register this thing."""
+        if self.network.connect():
+            self.network.start_message_handling(
+                self._handle_raw_message,
+                self._on_network_error
+            )
+            return True
+        return False
+
+    def disconnect(self):
+        """Disconnect from the server."""
+        self.network.disconnect()
+
+    def send_json(self, data: dict):
+        """Send JSON data to the server."""
+        return self.network.send_data(serialize_obj(data))
+
+    def _on_message(self, message):
+        """Handle parsed messages."""
+        if isinstance(message, ParsedMessage.TextMessage):
+            try:
+                json_data:Dict = json.loads(message.text)
+                core_log.debug(f"Received message: {json_data}")
+                uuid = json_data.get("uuid")
+                action = json_data.get("action")
+
+                if action == "callMcpTool":
+                    self._handle_call_mcp_tool(json_data, uuid)
+            except Exception as e:
+                print(f"Message processing error: {e}")
+        elif isinstance(message, ParsedMessage.BinaryMessage):
+            print(f"Received binary message of length: {len(message.data)}")
+
+    def _handle_call_mcp_tool(self, json_data:Dict, uuid):
+        """Handle property get requests."""
+        name = json_data.get("name")
+        arguments = json_data.get("arguments")
+        try:
+            message = self.call_mcp_tool(name, arguments)
+            self.send_json({"uuid": uuid, "success": True,"message": message})
+        except Exception as e:
+            self.send_json({"uuid": uuid, "success": False,"message": str(e)})
+
+    def _on_error(self, error):
+        """Handle parser errors."""
+        print(f"Parser error: {error}")
+
+    def call_mcp_tool(self, name:str, arguments:dict) -> str:
+        logging.debug(f"call_mcp_tool: {name}, {arguments}")
+        raise Exception(f"call_mcp_tool {name} not implemented")
